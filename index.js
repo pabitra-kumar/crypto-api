@@ -18,10 +18,10 @@ app.get('/api/transactions', async (req, res) => {
     const fetch = (await import('node-fetch')).default;
 
     // get address from request
-    const address = req.query.address;
+    const address = req?.query?.address;
 
     if (!address) {
-        res.send('Address is required').status(400);
+        return res.send('Address is required').status(400);
     }
 
     console.log(`Fetching data for address: ${address}`);
@@ -33,7 +33,7 @@ app.get('/api/transactions', async (req, res) => {
 
     const data = await response.json();
 
-    // create transaction
+    // create transaction if the address is not there otherwise update it
     const transaction = await createTransaction(address, data["result"]);
 
     // return data
@@ -53,8 +53,50 @@ app.get('/api/prices', async (req, res) => {
     }
 });
 
+// Endpoint to fetch the latest price from the database
+app.get('/api/expenses', async (req, res) => {
+    try {
+        const price = await Price.findOne().sort({ timestamp: -1 });
+        const fetch = (await import('node-fetch')).default;
+
+
+
+        if (!req.query.address) {
+            return res.send('Address is required').status(400);
+        }
+
+        // get address from request
+        const address = req?.query?.address;
+
+        console.log(`Fetching data for address: ${address}`);
+
+        // fetch data from etherscan api
+        const url = `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=10&sort=asc&apikey=${apikey}`;
+
+        const response = await fetch(url);
+
+        const data = await response.json();
+
+        // create transaction if the address is not there otherwise update it
+        const transaction = await createTransaction(address, data["result"]);
+
+        let calc = 0.0;
+
+        for (let i = 0; i < transaction.result.length; i++) {
+            calc += parseFloat(transaction.result[i].gasUsed) * parseFloat(transaction.result[i].gasPrice) / 1e18;
+        }
+
+        return res.send({
+            price: price.price,
+            expenses: calc
+        });
+    } catch (error) {
+        res.status(500).send('Error fetching Expenses');
+    }
+});
+
 app.get('/', (req, res) => {
-    res.send('Hello World!');
+    res.send('Welcome to Crypto Expense Tracker API');
 });
 
 app.listen(port, () => {
